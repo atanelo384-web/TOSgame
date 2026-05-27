@@ -96,6 +96,15 @@
             color: #00d4ff;
         }
 
+        .mod-badge-nav {
+            background: #ff4444;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
         .btn-primary {
             background: linear-gradient(135deg, #00d4ff, #0066ff);
             border: none;
@@ -124,6 +133,15 @@
 
         .btn-secondary:hover {
             border-color: #00d4ff;
+        }
+
+        .btn-mod {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+        }
+
+        .btn-mod:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
         }
 
         .container {
@@ -228,7 +246,7 @@
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 70vh;
+            height: 65vh;
             background: rgba(20, 20, 30, 0.6);
             border-radius: 24px;
             border: 1px solid rgba(255, 255, 255, 0.05);
@@ -241,6 +259,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .mod-badge {
@@ -249,6 +269,26 @@
             border-radius: 20px;
             font-size: 12px;
             color: #00d4ff;
+        }
+
+        .mod-panel {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 16px;
+            padding: 12px;
+            margin: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .mod-panel input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
         }
 
         .chat-messages {
@@ -473,6 +513,12 @@
                 </div>
                 <div class="mod-badge" id="modStatus">👤 Загрузка...</div>
             </div>
+            <div id="modPanel" class="mod-panel" style="display: none;">
+                <input type="text" id="modUserId" placeholder="ID пользователя (email)">
+                <input type="number" id="modHours" placeholder="Часы" value="1" style="width: 100px;">
+                <button class="btn-primary" onclick="modAddTime()">➕ Начислить время</button>
+                <button class="btn-primary" style="background: #ff4444;" onclick="modSendPromo()">🎁 Активировать промокод</button>
+            </div>
             <div class="chat-messages" id="chatMessages"></div>
             <div class="chat-input-area">
                 <input type="text" id="chatInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
@@ -485,7 +531,7 @@
     <div id="authModal" class="modal">
         <div class="modal-content">
             <h2>Вход в TSgame</h2>
-            <input type="email" id="loginEmail" placeholder="Email">
+            <input type="text" id="loginEmail" placeholder="Email или Логин">
             <input type="password" id="loginPassword" placeholder="Пароль">
             <button class="btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="login()">Войти</button>
             <button class="btn-secondary" style="width: 100%;" onclick="openRegisterModal()">Регистрация</button>
@@ -505,7 +551,7 @@
     </div>
 
     <script>
-        // ТВОЙ Firebase конфиг
+        // Firebase конфиг
         const firebaseConfig = {
             apiKey: "AIzaSyB-sV7XYkKv0hM1Rah5v_uKm3Qn6nq-qrM",
             authDomain: "tsgame-44dfb.firebaseapp.com",
@@ -516,7 +562,10 @@
             measurementId: "G-Q6F6YG3ZYQ"
         };
 
-        // Инициализация Firebase
+        // Данные модератора
+        const MODERATOR_EMAIL = "fog_dev";
+        const MODERATOR_PASSWORD = "@34Ed_ae";
+
         let app, auth, db;
         try {
             app = firebase.initializeApp(firebaseConfig);
@@ -528,6 +577,7 @@
         }
 
         let currentUser = null;
+        let isModerator = false;
         let userTime = 0;
         let currentPage = 'main';
         let chatUnsubscribe = null;
@@ -586,24 +636,45 @@
         }
 
         async function login() {
-            const email = document.getElementById('loginEmail').value;
+            let email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
+            
             if (!email || !password) { showToast("Введите email и пароль"); return; }
             
+            // Проверка на модератора (специальный логин)
+            if (email === MODERATOR_EMAIL && password === MODERATOR_PASSWORD) {
+                isModerator = true;
+                currentUser = { email: MODERATOR_EMAIL, uid: "moderator_" + Date.now(), displayName: "Модератор fog_dev" };
+                userTime = 9999;
+                showToast("✅ Вход выполнен! Вы вошли как МОДЕРАТОР");
+                closeModals();
+                updateUI();
+                if (currentPage === 'chat') initChat();
+                return;
+            }
+            
+            // Обычный пользователь
             try {
+                // Если ввели не email, добавляем @temp.com
+                if (!email.includes('@')) {
+                    email = email + "@temp.tsgame.com";
+                }
                 const cred = await auth.signInWithEmailAndPassword(email, password);
                 currentUser = cred.user;
+                isModerator = false;
                 await loadUserData();
                 showToast(`Добро пожаловать, ${currentUser.email}!`);
                 closeModals();
                 updateUI();
                 if (currentPage === 'chat') initChat();
-            } catch(e) { showToast("Ошибка: " + e.message, true); }
+            } catch(e) { 
+                showToast("Ошибка: " + e.message, true); 
+            }
         }
 
         async function register() {
             const name = document.getElementById('regName').value;
-            const email = document.getElementById('regEmail').value;
+            let email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
             
             if (!name || !email || !password) { showToast("Заполните все поля"); return; }
@@ -615,6 +686,7 @@
                     name: name, email: email, time: 60, createdAt: new Date()
                 });
                 currentUser = cred.user;
+                isModerator = false;
                 userTime = 60;
                 showToast("Регистрация успешна! +1 час бесплатно!");
                 closeModals();
@@ -623,7 +695,7 @@
         }
 
         async function loadUserData() {
-            if (db && currentUser) {
+            if (db && currentUser && !isModerator) {
                 const doc = await db.collection('users').doc(currentUser.uid).get();
                 if (doc.exists) {
                     userTime = doc.data().time || 0;
@@ -642,8 +714,13 @@
         function updateUI() {
             const panel = document.getElementById('userPanel');
             if (currentUser) {
+                let modBadge = '';
+                if (isModerator) {
+                    modBadge = '<span class="mod-badge-nav">👑 МОДЕРАТОР</span>';
+                }
                 panel.innerHTML = `
                     <div class="user-info">
+                        ${modBadge}
                         <span>👤 ${currentUser.displayName || currentUser.email?.split('@')[0]}</span>
                         <span class="user-time">⏱️ ${userTime} мин</span>
                         <button class="btn-secondary" style="padding: 4px 12px;" onclick="logout()">Выйти</button>
@@ -652,11 +729,18 @@
             } else {
                 panel.innerHTML = `<a class="btn-secondary" onclick="openAuthModal()">Войти</a>`;
             }
+            
+            // Показываем панель модератора в чате
+            const modPanel = document.getElementById('modPanel');
+            if (modPanel) {
+                modPanel.style.display = isModerator ? 'flex' : 'none';
+            }
         }
 
         function logout() {
-            auth.signOut();
+            if (auth) auth.signOut();
             currentUser = null;
+            isModerator = false;
             userTime = 0;
             if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
             updateUI();
@@ -666,7 +750,7 @@
         function buyTime(price, plan) {
             if (!currentUser) { showToast("Сначала войдите в аккаунт!"); openAuthModal(); return; }
             showToast(`💰 Запрос на оплату тарифа "${plan}" (${price}₽/час). Напишите модератору в чат.`, false);
-            if (db && currentUser) {
+            if (db && currentUser && !isModerator) {
                 db.collection('chats').doc('main').collection('messages').add({
                     text: `🔔 ПОЛЬЗОВАТЕЛЬ ${currentUser.displayName || currentUser.email} ХОЧЕТ КУПИТЬ "${plan}" ТАРИФ (${price}₽/час)`,
                     userId: currentUser.uid,
@@ -678,15 +762,102 @@
             }
         }
 
+        // Модератор: начислить время пользователю
+        async function modAddTime() {
+            if (!isModerator) return;
+            const userId = document.getElementById('modUserId').value;
+            const hours = parseInt(document.getElementById('modHours').value) || 1;
+            const minutes = hours * 60;
+            
+            if (!userId) { showToast("Введите ID пользователя (email)"); return; }
+            
+            try {
+                // Ищем пользователя по email в Firestore
+                const usersRef = db.collection('users');
+                const query = await usersRef.where('email', '==', userId).get();
+                
+                if (query.empty) {
+                    showToast("Пользователь не найден!", true);
+                    return;
+                }
+                
+                const userDoc = query.docs[0];
+                const currentTime = userDoc.data().time || 0;
+                await userDoc.ref.update({ time: currentTime + minutes });
+                
+                showToast(`✅ Начислено ${hours} час(ов) пользователю ${userId}`);
+                document.getElementById('modUserId').value = '';
+                
+                // Отправляем уведомление в чат
+                await db.collection('chats').doc('main').collection('messages').add({
+                    text: `🎁 МОДЕРАТОР начислил ${hours} час(ов) игрового времени пользователю ${userId}`,
+                    userId: 'system',
+                    userName: 'Система',
+                    userRole: 'system',
+                    timestamp: new Date(),
+                    isModerator: false
+                });
+            } catch(e) {
+                showToast("Ошибка: " + e.message, true);
+            }
+        }
+        
+        // Модератор: активировать промокод
+        async function modSendPromo() {
+            if (!isModerator) return;
+            
+            const promoCode = prompt("Введите промокод для активации:");
+            if (!promoCode) return;
+            
+            // Список валидных промокодов
+            const validPromos = ["TSGAME2024", "FREEHOUR", "WELCOME", "STREAMER", "GIVEAWAY", "FOGPLAY"];
+            
+            if (validPromos.includes(promoCode.toUpperCase())) {
+                const userId = prompt("Введите email пользователя для активации промокода:");
+                if (!userId) return;
+                
+                try {
+                    const usersRef = db.collection('users');
+                    const query = await usersRef.where('email', '==', userId).get();
+                    
+                    if (query.empty) {
+                        showToast("Пользователь не найден!", true);
+                        return;
+                    }
+                    
+                    const userDoc = query.docs[0];
+                    const currentTime = userDoc.data().time || 0;
+                    await userDoc.ref.update({ time: currentTime + 60 });
+                    
+                    showToast(`✅ Промокод "${promoCode}" активирован! +1 час пользователю ${userId}`);
+                    
+                    await db.collection('chats').doc('main').collection('messages').add({
+                        text: `🎁 МОДЕРАТОР активировал промокод "${promoCode}" для пользователя ${userId} (+1 час)`,
+                        userId: 'system',
+                        userName: 'Система',
+                        userRole: 'system',
+                        timestamp: new Date(),
+                        isModerator: false
+                    });
+                } catch(e) {
+                    showToast("Ошибка: " + e.message, true);
+                }
+            } else {
+                showToast("Неверный промокод!", true);
+            }
+        }
+
         function launchGame(name, path) {
             if (!currentUser) { showToast("Войдите в аккаунт, чтобы играть!"); openAuthModal(); return; }
-            if (userTime <= 0) { showToast("❌ Недостаточно времени! Обратитесь к модератору в чат.", true); return; }
+            if (userTime <= 0 && !isModerator) { showToast("❌ Недостаточно времени! Обратитесь к модератору в чат.", true); return; }
             
-            userTime -= 1;
-            if (db && currentUser) {
-                db.collection('users').doc(currentUser.uid).update({ time: userTime });
+            if (!isModerator && userTime > 0) {
+                userTime -= 1;
+                if (db && currentUser) {
+                    db.collection('users').doc(currentUser.uid).update({ time: userTime });
+                }
+                updateUI();
             }
-            updateUI();
             showToast(`🎮 ${name} запускается... Осталось ${userTime} минут`, false);
             
             if (path && path.includes('.exe')) {
@@ -705,12 +876,19 @@
                 else if (msg.userRole === 'system') className += 'message-system';
                 else className += 'user';
                 
+                let timeStr = msg.timeStr || '';
+                if (msg.timestamp?.toDate) {
+                    timeStr = msg.timestamp.toDate().toLocaleTimeString();
+                } else if (msg.timestamp) {
+                    timeStr = new Date(msg.timestamp).toLocaleTimeString();
+                }
+                
                 return `
                     <div class="${className}">
                         ${!msg.isModerator && msg.userRole !== 'system' ? `<div class="message-name">👤 ${msg.userName}</div>` : ''}
                         ${msg.isModerator ? `<div class="message-name">🛡️ Модератор</div>` : ''}
                         ${msg.text}
-                        <div class="message-time">${msg.timeStr || new Date(msg.timestamp?.toDate?.() || msg.timestamp).toLocaleTimeString()}</div>
+                        <div class="message-time">${timeStr}</div>
                     </div>
                 `;
             }).join('');
@@ -732,15 +910,19 @@
             });
             
             // Статус модератора
-            db.collection('moderators').doc('status').onSnapshot(doc => {
-                const status = document.getElementById('modStatus');
-                if (status && doc.exists) {
-                    const mod = doc.data();
-                    status.innerHTML = `🟢 Модератор ${mod.name || 'online'} на связи`;
-                } else {
-                    status.innerHTML = `🟢 Модератор скоро ответит`;
-                }
-            });
+            if (db) {
+                db.collection('moderators').doc('status').onSnapshot(doc => {
+                    const status = document.getElementById('modStatus');
+                    if (status && doc.exists) {
+                        const mod = doc.data();
+                        status.innerHTML = `🟢 Модератор ${mod.name || 'online'} на связи`;
+                    } else if (isModerator) {
+                        status.innerHTML = `🟢 Вы модератор! Используйте панель ниже`;
+                    } else {
+                        status.innerHTML = `🟢 Модератор скоро ответит`;
+                    }
+                });
+            }
         }
 
         async function sendMessage() {
@@ -757,9 +939,9 @@
                 text: text,
                 userId: currentUser.uid,
                 userName: currentUser.displayName || currentUser.email?.split('@')[0],
-                userRole: 'user',
+                userRole: isModerator ? 'moderator' : 'user',
                 timestamp: new Date(),
-                isModerator: false
+                isModerator: isModerator
             });
         }
 
@@ -774,26 +956,29 @@
         }
 
         // Авторизация через Firebase
-        auth.onAuthStateChanged(async (user) => {
-            currentUser = user;
-            if (user) {
-                await loadUserData();
-                if (currentPage === 'chat') initChat();
-            } else {
-                if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
-            }
-            updateUI();
-        });
+        if (auth) {
+            auth.onAuthStateChanged(async (user) => {
+                if (user && !isModerator) {
+                    currentUser = user;
+                    await loadUserData();
+                    if (currentPage === 'chat') initChat();
+                }
+                updateUI();
+            });
+        }
 
         renderGames();
         
         setInterval(async () => {
-            if (currentUser && userTime > 0 && db && currentUser) {
+            if (currentUser && userTime > 0 && !isModerator && db && currentUser) {
                 await db.collection('users').doc(currentUser.uid).update({ time: userTime });
             }
         }, 60000);
         
         showPage('main');
+        
+        // Если уже есть модератор из сессии
+        if (isModerator) updateUI();
     </script>
 </body>
 </html>
