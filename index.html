@@ -22,7 +22,6 @@
             min-height: 100vh;
         }
 
-        /* Кастомный скролл */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -34,7 +33,6 @@
             border-radius: 10px;
         }
 
-        /* Навигация */
         .navbar {
             position: fixed;
             top: 0;
@@ -134,7 +132,6 @@
             padding: 88px 24px 48px;
         }
 
-        /* Герой */
         .hero {
             text-align: center;
             padding: 60px 0;
@@ -155,7 +152,6 @@
             color: #888;
         }
 
-        /* Карточки тарифов */
         .pricing-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -202,7 +198,6 @@
             font-size: 14px;
         }
 
-        /* Сетка игр */
         .games-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -230,7 +225,6 @@
             margin-bottom: 16px;
         }
 
-        /* Чат */
         .chat-container {
             display: flex;
             flex-direction: column;
@@ -329,7 +323,6 @@
             border-color: #00d4ff;
         }
 
-        /* Модалки */
         .modal {
             display: none;
             position: fixed;
@@ -478,7 +471,7 @@
                     <h3>💬 Чат с модератором</h3>
                     <span style="font-size: 12px; color: #888;">Модератор ответит в течение 5 минут</span>
                 </div>
-                <div class="mod-badge" id="modStatus">👤 Модератор: Ожидание...</div>
+                <div class="mod-badge" id="modStatus">👤 Загрузка...</div>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
             <div class="chat-input-area">
@@ -512,33 +505,33 @@
     </div>
 
     <script>
-        // Конфиг Firebase (замените на свой)
+        // ТВОЙ Firebase конфиг
         const firebaseConfig = {
-            apiKey: "AIzaSyDEFAULT_PLACEHOLDER_REPLACE_ME",
-            authDomain: "tsgame-8b3c4.firebaseapp.com",
-            projectId: "tsgame-8b3c4",
-            storageBucket: "tsgame-8b3c4.firebasestorage.app",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcdef123456"
+            apiKey: "AIzaSyB-sV7XYkKv0hM1Rah5v_uKm3Qn6nq-qrM",
+            authDomain: "tsgame-44dfb.firebaseapp.com",
+            projectId: "tsgame-44dfb",
+            storageBucket: "tsgame-44dfb.firebasestorage.app",
+            messagingSenderId: "579682171064",
+            appId: "1:579682171064:web:20cab5fae3b42a17c29c4d",
+            measurementId: "G-Q6F6YG3ZYQ"
         };
 
+        // Инициализация Firebase
         let app, auth, db;
+        try {
+            app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
+            console.log("✅ Firebase подключен!");
+        } catch(e) { 
+            console.warn("Firebase ошибка:", e);
+        }
+
         let currentUser = null;
         let userTime = 0;
         let currentPage = 'main';
         let chatUnsubscribe = null;
 
-        // Инициализация Firebase
-        try {
-            if (typeof firebase !== 'undefined') {
-                app = firebase.initializeApp(firebaseConfig);
-                auth = firebase.auth();
-                db = firebase.firestore();
-                console.log("Firebase инициализирован");
-            }
-        } catch(e) { console.warn("Firebase не настроен, работаем в демо-режиме"); }
-
-        // Игры
         const games = [
             { name: "Grand Theft Auto V", icon: "🏎️", path: "E:\\Grand Theft Auto V\\PlayGTAV.exe" },
             { name: "Cyberpunk 2077", icon: "🔫", path: "" },
@@ -565,7 +558,6 @@
             document.getElementById('gamesPage').style.display = page === 'games' ? 'block' : 'none';
             document.getElementById('chatPage').style.display = page === 'chat' ? 'block' : 'none';
             
-            // Обновляем активную ссылку
             ['navMain', 'navGames', 'navChat'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -599,21 +591,13 @@
             if (!email || !password) { showToast("Введите email и пароль"); return; }
             
             try {
-                if (auth) {
-                    const cred = await auth.signInWithEmailAndPassword(email, password);
-                    currentUser = cred.user;
-                    await loadUserData();
-                    showToast(`Добро пожаловать, ${currentUser.email}!`);
-                    closeModals();
-                    updateUI();
-                    if (currentPage === 'chat') initChat();
-                } else {
-                    currentUser = { email, uid: 'demo_' + Date.now(), displayName: email.split('@')[0] };
-                    userTime = 60;
-                    showToast("Демо-режим: +1 час игрового времени");
-                    closeModals();
-                    updateUI();
-                }
+                const cred = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = cred.user;
+                await loadUserData();
+                showToast(`Добро пожаловать, ${currentUser.email}!`);
+                closeModals();
+                updateUI();
+                if (currentPage === 'chat') initChat();
             } catch(e) { showToast("Ошибка: " + e.message, true); }
         }
 
@@ -625,20 +609,14 @@
             if (!name || !email || !password) { showToast("Заполните все поля"); return; }
             
             try {
-                if (auth) {
-                    const cred = await auth.createUserWithEmailAndPassword(email, password);
-                    await cred.user.updateProfile({ displayName: name });
-                    await db.collection('users').doc(cred.user.uid).set({
-                        name: name, email: email, time: 60, createdAt: new Date()
-                    });
-                    currentUser = cred.user;
-                    userTime = 60;
-                    showToast("Регистрация успешна! +1 час бесплатно!");
-                } else {
-                    currentUser = { email, displayName: name, uid: 'demo_' + Date.now() };
-                    userTime = 60;
-                    showToast("Демо-режим: +1 час игрового времени");
-                }
+                const cred = await auth.createUserWithEmailAndPassword(email, password);
+                await cred.user.updateProfile({ displayName: name });
+                await db.collection('users').doc(cred.user.uid).set({
+                    name: name, email: email, time: 60, createdAt: new Date()
+                });
+                currentUser = cred.user;
+                userTime = 60;
+                showToast("Регистрация успешна! +1 час бесплатно!");
                 closeModals();
                 updateUI();
             } catch(e) { showToast("Ошибка: " + e.message, true); }
@@ -674,11 +652,10 @@
             } else {
                 panel.innerHTML = `<a class="btn-secondary" onclick="openAuthModal()">Войти</a>`;
             }
-            document.getElementById('gameCount')?.setAttribute('data-time', userTime);
         }
 
         function logout() {
-            if (auth) auth.signOut();
+            auth.signOut();
             currentUser = null;
             userTime = 0;
             if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
@@ -688,13 +665,13 @@
 
         function buyTime(price, plan) {
             if (!currentUser) { showToast("Сначала войдите в аккаунт!"); openAuthModal(); return; }
-            showToast(`💰 Запрос на оплату тарифа "${plan}" (${price}₽). Модератор активирует время после оплаты в чате.`, false);
-            if (db && currentUser && chatUnsubscribe) {
+            showToast(`💰 Запрос на оплату тарифа "${plan}" (${price}₽/час). Напишите модератору в чат.`, false);
+            if (db && currentUser) {
                 db.collection('chats').doc('main').collection('messages').add({
-                    text: `🔔 ПОЛЬЗОВАТЕЛЬ ${currentUser.displayName || currentUser.email} ХОЧЕТ КУПИТЬ "${plan}" ТАРИФ (${price}₽/час). Номер заказа: #${Date.now()}`,
-                    userId: 'system',
-                    userName: 'Система',
-                    userRole: 'system',
+                    text: `🔔 ПОЛЬЗОВАТЕЛЬ ${currentUser.displayName || currentUser.email} ХОЧЕТ КУПИТЬ "${plan}" ТАРИФ (${price}₽/час)`,
+                    userId: currentUser.uid,
+                    userName: currentUser.displayName || currentUser.email,
+                    userRole: 'user',
                     timestamp: new Date(),
                     isModerator: false
                 });
@@ -717,7 +694,6 @@
             }
         }
 
-        // Чат с модератором
         let currentMessages = [];
 
         function renderMessages() {
@@ -742,14 +718,7 @@
         }
 
         async function initChat() {
-            if (!db || !currentUser) {
-                // Демо-чат
-                currentMessages = [
-                    { text: "Добро пожаловать в чат! Модератор ответит вам в ближайшее время.", isModerator: true, timestamp: new Date(), userName: "Модератор" }
-                ];
-                renderMessages();
-                return;
-            }
+            if (!db || !currentUser) return;
             
             if (chatUnsubscribe) chatUnsubscribe();
             
@@ -762,7 +731,7 @@
                 renderMessages();
             });
             
-            // Обновляем статус модератора
+            // Статус модератора
             db.collection('moderators').doc('status').onSnapshot(doc => {
                 const status = document.getElementById('modStatus');
                 if (status && doc.exists) {
@@ -784,34 +753,14 @@
             
             input.value = '';
             
-            if (db && currentUser) {
-                await db.collection('chats').doc('main').collection('messages').add({
-                    text: text,
-                    userId: currentUser.uid,
-                    userName: currentUser.displayName || currentUser.email?.split('@')[0],
-                    userRole: 'user',
-                    timestamp: new Date(),
-                    isModerator: false
-                });
-            } else {
-                currentMessages.push({
-                    text: text,
-                    isModerator: false,
-                    userName: currentUser.displayName || currentUser.email,
-                    timestamp: new Date()
-                });
-                renderMessages();
-                
-                setTimeout(() => {
-                    currentMessages.push({
-                        text: "Спасибо за сообщение! Модератор скоро ответит. Для активации промокода напишите его модератору.",
-                        isModerator: true,
-                        userName: "Модератор",
-                        timestamp: new Date()
-                    });
-                    renderMessages();
-                }, 1000);
-            }
+            await db.collection('chats').doc('main').collection('messages').add({
+                text: text,
+                userId: currentUser.uid,
+                userName: currentUser.displayName || currentUser.email?.split('@')[0],
+                userRole: 'user',
+                timestamp: new Date(),
+                isModerator: false
+            });
         }
 
         function showToast(msg, isError = false) {
@@ -825,23 +774,22 @@
         }
 
         // Авторизация через Firebase
-        if (auth) {
-            auth.onAuthStateChanged(async (user) => {
-                currentUser = user;
-                if (user) {
-                    await loadUserData();
-                    if (currentPage === 'chat') initChat();
-                } else {
-                    if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
-                }
-                updateUI();
-            });
-        }
+        auth.onAuthStateChanged(async (user) => {
+            currentUser = user;
+            if (user) {
+                await loadUserData();
+                if (currentPage === 'chat') initChat();
+            } else {
+                if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+            }
+            updateUI();
+        });
 
         renderGames();
-        setInterval(() => {
+        
+        setInterval(async () => {
             if (currentUser && userTime > 0 && db && currentUser) {
-                db.collection('users').doc(currentUser.uid).update({ time: userTime });
+                await db.collection('users').doc(currentUser.uid).update({ time: userTime });
             }
         }, 60000);
         
